@@ -7,7 +7,7 @@
 package blockblob
 
 import (
-	"fmt"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/internal/exported"
@@ -39,10 +39,13 @@ type UploadOptions struct {
 	// Specify the transactional md5 for the body, to be validated by the service.
 	TransactionalContentMD5 []byte
 
-	HTTPHeaders      *blob.HTTPHeaders
-	CpkInfo          *blob.CpkInfo
-	CpkScopeInfo     *blob.CpkScopeInfo
-	AccessConditions *blob.AccessConditions
+	HTTPHeaders                  *blob.HTTPHeaders
+	CpkInfo                      *blob.CpkInfo
+	CpkScopeInfo                 *blob.CpkScopeInfo
+	AccessConditions             *blob.AccessConditions
+	LegalHold                    *bool
+	ImmutabilityPolicyMode       *blob.ImmutabilityPolicySetting
+	ImmutabilityPolicyExpiryTime *time.Time
 }
 
 func (o *UploadOptions) format() (*generated.BlockBlobClientUploadOptions, *generated.BlobHTTPHeaders, *generated.LeaseAccessConditions,
@@ -52,10 +55,13 @@ func (o *UploadOptions) format() (*generated.BlockBlobClientUploadOptions, *gene
 	}
 
 	basics := generated.BlockBlobClientUploadOptions{
-		BlobTagsString:          shared.SerializeBlobTagsToStrPtr(o.Tags),
-		Metadata:                o.Metadata,
-		Tier:                    o.Tier,
-		TransactionalContentMD5: o.TransactionalContentMD5,
+		BlobTagsString:           shared.SerializeBlobTagsToStrPtr(o.Tags),
+		Metadata:                 o.Metadata,
+		Tier:                     o.Tier,
+		TransactionalContentMD5:  o.TransactionalContentMD5,
+		LegalHold:                o.LegalHold,
+		ImmutabilityPolicyMode:   o.ImmutabilityPolicyMode,
+		ImmutabilityPolicyExpiry: o.ImmutabilityPolicyExpiryTime,
 	}
 
 	leaseAccessConditions, modifiedAccessConditions := exported.FormatBlobAccessConditions(o.AccessConditions)
@@ -133,17 +139,20 @@ func (o *StageBlockFromURLOptions) format() (*generated.BlockBlobClientStageBloc
 
 // CommitBlockListOptions contains the optional parameters for Client.CommitBlockList method.
 type CommitBlockListOptions struct {
-	Tags                      map[string]string
-	Metadata                  map[string]string
-	RequestID                 *string
-	Tier                      *blob.AccessTier
-	Timeout                   *int32
-	TransactionalContentCRC64 []byte
-	TransactionalContentMD5   []byte
-	HTTPHeaders               *blob.HTTPHeaders
-	CpkInfo                   *blob.CpkInfo
-	CpkScopeInfo              *blob.CpkScopeInfo
-	AccessConditions          *blob.AccessConditions
+	Tags                         map[string]string
+	Metadata                     map[string]string
+	RequestID                    *string
+	Tier                         *blob.AccessTier
+	Timeout                      *int32
+	TransactionalContentCRC64    []byte
+	TransactionalContentMD5      []byte
+	HTTPHeaders                  *blob.HTTPHeaders
+	CpkInfo                      *blob.CpkInfo
+	CpkScopeInfo                 *blob.CpkScopeInfo
+	AccessConditions             *blob.AccessConditions
+	LegalHold                    *bool
+	ImmutabilityPolicyMode       *blob.ImmutabilityPolicySetting
+	ImmutabilityPolicyExpiryTime *time.Time
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -244,15 +253,10 @@ func (o *uploadFromReaderOptions) getCommitBlockListOptions() *CommitBlockListOp
 
 // UploadStreamOptions provides set of configurations for UploadStream operation
 type UploadStreamOptions struct {
-	// transferManager provides a transferManager that controls buffer allocation/reuse and
-	// concurrency. This overrides BlockSize and MaxConcurrency if set.
-	transferManager      shared.TransferManager
-	transferMangerNotSet bool
-
 	// BlockSize defines the size of the buffer used during upload. The default and mimimum value is 1 MiB.
-	BlockSize int
+	BlockSize int64
 
-	// Concurrency defines the number of concurrent uploads to be performed to upload the file.
+	// Concurrency defines the max number of concurrent uploads to be performed to upload the file.
 	// Each concurrent upload will create a buffer of size BlockSize.  The default value is one.
 	Concurrency int
 
@@ -265,11 +269,7 @@ type UploadStreamOptions struct {
 	CpkScopeInfo     *blob.CpkScopeInfo
 }
 
-func (u *UploadStreamOptions) format() error {
-	if u == nil || u.transferManager != nil {
-		return nil
-	}
-
+func (u *UploadStreamOptions) setDefaults() {
 	if u.Concurrency == 0 {
 		u.Concurrency = 1
 	}
@@ -277,17 +277,13 @@ func (u *UploadStreamOptions) format() error {
 	if u.BlockSize < _1MiB {
 		u.BlockSize = _1MiB
 	}
-
-	var err error
-	u.transferManager, err = shared.NewStaticBuffer(u.BlockSize, u.Concurrency)
-	if err != nil {
-		return fmt.Errorf("bug: default transfer manager could not be created: %s", err)
-	}
-	u.transferMangerNotSet = true
-	return nil
 }
 
 func (u *UploadStreamOptions) getStageBlockOptions() *StageBlockOptions {
+	if u == nil {
+		return nil
+	}
+
 	leaseAccessConditions, _ := exported.FormatBlobAccessConditions(u.AccessConditions)
 	return &StageBlockOptions{
 		CpkInfo:               u.CpkInfo,
@@ -297,7 +293,11 @@ func (u *UploadStreamOptions) getStageBlockOptions() *StageBlockOptions {
 }
 
 func (u *UploadStreamOptions) getCommitBlockListOptions() *CommitBlockListOptions {
-	options := &CommitBlockListOptions{
+	if u == nil {
+		return nil
+	}
+
+	return &CommitBlockListOptions{
 		Tags:             u.Tags,
 		Metadata:         u.Metadata,
 		Tier:             u.AccessTier,
@@ -306,6 +306,40 @@ func (u *UploadStreamOptions) getCommitBlockListOptions() *CommitBlockListOption
 		CpkScopeInfo:     u.CpkScopeInfo,
 		AccessConditions: u.AccessConditions,
 	}
-
-	return options
 }
+
+func (u *UploadStreamOptions) getUploadOptions() *UploadOptions {
+	if u == nil {
+		return nil
+	}
+
+	return &UploadOptions{
+		Tags:             u.Tags,
+		Metadata:         u.Metadata,
+		Tier:             u.AccessTier,
+		HTTPHeaders:      u.HTTPHeaders,
+		CpkInfo:          u.CpkInfo,
+		CpkScopeInfo:     u.CpkScopeInfo,
+		AccessConditions: u.AccessConditions,
+	}
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+// ExpiryType defines values for ExpiryType
+type ExpiryType = exported.ExpiryType
+
+// ExpiryTypeAbsolute defines the absolute time for the blob expiry
+type ExpiryTypeAbsolute = exported.ExpiryTypeAbsolute
+
+// ExpiryTypeRelativeToNow defines the duration relative to now for the blob expiry
+type ExpiryTypeRelativeToNow = exported.ExpiryTypeRelativeToNow
+
+// ExpiryTypeRelativeToCreation defines the duration relative to creation for the blob expiry
+type ExpiryTypeRelativeToCreation = exported.ExpiryTypeRelativeToCreation
+
+// ExpiryTypeNever defines that the blob will be set to never expire
+type ExpiryTypeNever = exported.ExpiryTypeNever
+
+// SetExpiryOptions contains the optional parameters for the Client.SetExpiry method.
+type SetExpiryOptions = exported.SetExpiryOptions

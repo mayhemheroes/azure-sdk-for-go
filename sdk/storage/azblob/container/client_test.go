@@ -9,6 +9,7 @@ package container_test
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -2066,4 +2067,119 @@ func (s *ContainerRecordedTestsSuite) TestContainerUndelete() {
 		}
 	}
 	_require.Nil(err)
+}
+
+func (s *ContainerUnrecordedTestsSuite) TestSetAccessPoliciesInDifferentTimeFormats() {
+	_require := require.New(s.T())
+	testName := s.T().Name()
+	svcClient, err := testcommon.GetServiceClient(s.T(), testcommon.TestAccountDefault, nil)
+	_require.NoError(err)
+
+	containerName := testcommon.GenerateContainerName(testName)
+	containerClient := testcommon.CreateNewContainer(context.Background(), _require, containerName, svcClient)
+	defer testcommon.DeleteContainer(context.Background(), _require, containerClient)
+
+	id := "timeInEST"
+	permission := "rw"
+	loc, err := time.LoadLocation("EST")
+	_require.Nil(err)
+	start := time.Now().In(loc)
+	expiry := start.Add(10 * time.Hour)
+
+	signedIdentifiers := make([]*container.SignedIdentifier, 0)
+	signedIdentifiers = append(signedIdentifiers, &container.SignedIdentifier{
+		ID: &id,
+		AccessPolicy: &container.AccessPolicy{
+			Start:      &start,
+			Expiry:     &expiry,
+			Permission: &permission,
+		},
+	})
+
+	id2 := "timeInIST"
+	permission2 := "r"
+	loc2, err := time.LoadLocation("Asia/Kolkata")
+	_require.Nil(err)
+	start2 := time.Now().In(loc2)
+	expiry2 := start2.Add(5 * time.Hour)
+
+	signedIdentifiers = append(signedIdentifiers, &container.SignedIdentifier{
+		ID: &id2,
+		AccessPolicy: &container.AccessPolicy{
+			Start:      &start2,
+			Expiry:     &expiry2,
+			Permission: &permission2,
+		},
+	})
+
+	id3 := "nilTime"
+	permission3 := "r"
+
+	signedIdentifiers = append(signedIdentifiers, &container.SignedIdentifier{
+		ID: &id3,
+		AccessPolicy: &container.AccessPolicy{
+			Permission: &permission3,
+		},
+	})
+
+	_, err = containerClient.SetAccessPolicy(context.Background(), signedIdentifiers, nil)
+	_require.Nil(err)
+
+	// make a Get to assert three access policies
+	resp, err := containerClient.GetAccessPolicy(context.Background(), nil)
+	_require.Nil(err)
+	_require.Len(resp.SignedIdentifiers, 3)
+	_require.EqualValues(resp.SignedIdentifiers, signedIdentifiers)
+}
+
+func (s *ContainerRecordedTestsSuite) TestSetAccessPolicyWithNullId() {
+	_require := require.New(s.T())
+	testName := s.T().Name()
+	svcClient, err := testcommon.GetServiceClient(s.T(), testcommon.TestAccountDefault, nil)
+	_require.NoError(err)
+
+	containerName := testcommon.GenerateContainerName(testName)
+	containerClient := testcommon.CreateNewContainer(context.Background(), _require, containerName, svcClient)
+	defer testcommon.DeleteContainer(context.Background(), _require, containerClient)
+
+	signedIdentifiers := make([]*container.SignedIdentifier, 0)
+	signedIdentifiers = append(signedIdentifiers, &container.SignedIdentifier{
+		AccessPolicy: &container.AccessPolicy{
+			Permission: to.Ptr("rw"),
+		},
+	})
+
+	_, err = containerClient.SetAccessPolicy(context.Background(), signedIdentifiers, nil)
+	_require.NotNil(err)
+	testcommon.ValidateBlobErrorCode(_require, err, bloberror.InvalidXMLDocument)
+
+	resp, err := containerClient.GetAccessPolicy(context.Background(), nil)
+	_require.Nil(err)
+	_require.Len(resp.SignedIdentifiers, 0)
+}
+
+func (s *ContainerUnrecordedTestsSuite) TestBlobNameSpecialCharacters() {
+	_require := require.New(s.T())
+
+	const containerURL = testcommon.FakeStorageURL + "/fakecontainer"
+	client, err := container.NewClientWithNoCredential(containerURL, nil)
+	_require.NoError(err)
+	_require.NotNil(client)
+
+	blobNames := []string{"foo%5Cbar", "hello? sausage/Hello.txt", "世界.txt"}
+	for _, blobName := range blobNames {
+		expected := containerURL + "/" + url.PathEscape(blobName)
+
+		abc := client.NewAppendBlobClient(blobName)
+		_require.Equal(expected, abc.URL())
+
+		bbc := client.NewBlockBlobClient(blobName)
+		_require.Equal(expected, bbc.URL())
+
+		pbc := client.NewPageBlobClient(blobName)
+		_require.Equal(expected, pbc.URL())
+
+		bc := client.NewBlobClient(blobName)
+		_require.Equal(expected, bc.URL())
+	}
 }

@@ -158,17 +158,6 @@ func (b *Client) SetTier(ctx context.Context, tier AccessTier, o *SetTierOptions
 	return resp, err
 }
 
-// SetExpiry operation sets an expiry time on an existing blob. This operation is only allowed on Hierarchical Namespace enabled accounts.
-// For more information, see https://learn.microsoft.com/en-us/rest/api/storageservices/set-blob-expiry
-func (b *Client) SetExpiry(ctx context.Context, expiryType ExpiryType, o *SetExpiryOptions) (SetExpiryResponse, error) {
-	if expiryType == nil {
-		expiryType = ExpiryTypeNever{}
-	}
-	et, opts := expiryType.format(o)
-	resp, err := b.generated().SetExpiry(ctx, et, opts)
-	return resp, err
-}
-
 // GetProperties returns the blob's properties.
 // For more information, see https://docs.microsoft.com/rest/api/storageservices/get-blob-properties.
 func (b *Client) GetProperties(ctx context.Context, options *GetPropertiesOptions) (GetPropertiesResponse, error) {
@@ -240,6 +229,31 @@ func (b *Client) GetTags(ctx context.Context, options *GetTagsOptions) (GetTagsR
 	resp, err := b.generated().GetTags(ctx, blobGetTagsOptions, modifiedAccessConditions, leaseAccessConditions)
 	return resp, err
 
+}
+
+// SetImmutabilityPolicy operation enables users to set the immutability policy on a blob. Mode defaults to "Unlocked".
+// https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview
+func (b *Client) SetImmutabilityPolicy(ctx context.Context, expiryTime time.Time, options *SetImmutabilityPolicyOptions) (SetImmutabilityPolicyResponse, error) {
+	blobSetImmutabilityPolicyOptions, modifiedAccessConditions := options.format()
+	blobSetImmutabilityPolicyOptions.ImmutabilityPolicyExpiry = &expiryTime
+	resp, err := b.generated().SetImmutabilityPolicy(ctx, blobSetImmutabilityPolicyOptions, modifiedAccessConditions)
+	return resp, err
+}
+
+// DeleteImmutabilityPolicy operation enables users to delete the immutability policy on a blob.
+// https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview
+func (b *Client) DeleteImmutabilityPolicy(ctx context.Context, options *DeleteImmutabilityPolicyOptions) (DeleteImmutabilityPolicyResponse, error) {
+	deleteImmutabilityOptions := options.format()
+	resp, err := b.generated().DeleteImmutabilityPolicy(ctx, deleteImmutabilityOptions)
+	return resp, err
+}
+
+// SetLegalHold operation enables users to set legal hold on a blob.
+// https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview
+func (b *Client) SetLegalHold(ctx context.Context, legalHold bool, options *SetLegalHoldOptions) (SetLegalHoldResponse, error) {
+	setLegalHoldOptions := options.format()
+	resp, err := b.generated().SetLegalHold(ctx, legalHold, setLegalHoldOptions)
+	return resp, err
 }
 
 // CopyFromURL synchronously copies the data at the source URL to a block blob, with sizes up to 256 MB.
@@ -322,8 +336,7 @@ func (b *Client) download(ctx context.Context, writer io.WriterAt, o downloadOpt
 		TransferSize:  count,
 		ChunkSize:     o.BlockSize,
 		Concurrency:   o.Concurrency,
-		Operation: func(chunkStart int64, count int64, ctx context.Context) error {
-
+		Operation: func(ctx context.Context, chunkStart int64, count int64) error {
 			downloadBlobOptions := o.getDownloadBlobOptions(HTTPRange{
 				Offset: chunkStart + o.Range.Offset,
 				Count:  count,

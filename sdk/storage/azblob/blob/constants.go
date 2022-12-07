@@ -9,7 +9,6 @@ package blob
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/internal/exported"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/internal/generated"
-	"time"
 )
 
 const (
@@ -169,33 +168,6 @@ func PossibleDeleteTypeValues() []DeleteType {
 	return generated.PossibleDeleteTypeValues()
 }
 
-// ExpiryOptions defines values for ExpiryOptions
-type ExpiryOptions = generated.ExpiryOptions
-
-// ExpiryType defines values for ExpiryType
-type ExpiryType interface {
-	format(o *SetExpiryOptions) (generated.ExpiryOptions, *generated.BlobClientSetExpiryOptions)
-}
-
-// ExpiryTypeAbsolute defines the absolute time for the blob expiry
-type ExpiryTypeAbsolute time.Time
-
-// ExpiryTypeRelativeToNow defines the duration relative to now for the blob expiry
-type ExpiryTypeRelativeToNow time.Duration
-
-// ExpiryTypeRelativeToCreation defines the duration relative to creation for the blob expiry
-type ExpiryTypeRelativeToCreation time.Duration
-
-// ExpiryTypeNever defines that the blob will be set to never expire
-type ExpiryTypeNever struct {
-	// empty struct since NeverExpire expiry type does not require expiry time
-}
-
-// PossibleExpiryOptionsValues returns the possible values for the ExpiryOptions const type.
-func PossibleExpiryOptionsValues() []ExpiryOptions {
-	return generated.PossibleExpiryOptionsValues()
-}
-
 // QueryFormatType - The quick query format type.
 type QueryFormatType = generated.QueryFormatType
 
@@ -209,46 +181,4 @@ const (
 // PossibleQueryFormatTypeValues returns the possible values for the QueryFormatType const type.
 func PossibleQueryFormatTypeValues() []QueryFormatType {
 	return generated.PossibleQueryFormatTypeValues()
-}
-
-// LeaseDurationType defines values for LeaseDurationType
-type LeaseDurationType = generated.LeaseDurationType
-
-const (
-	LeaseDurationTypeInfinite LeaseDurationType = generated.LeaseDurationTypeInfinite
-	LeaseDurationTypeFixed    LeaseDurationType = generated.LeaseDurationTypeFixed
-)
-
-// PossibleLeaseDurationTypeValues returns the possible values for the LeaseDurationType const type.
-func PossibleLeaseDurationTypeValues() []LeaseDurationType {
-	return generated.PossibleLeaseDurationTypeValues()
-}
-
-// LeaseStateType defines values for LeaseStateType
-type LeaseStateType = generated.LeaseStateType
-
-const (
-	LeaseStateTypeAvailable LeaseStateType = generated.LeaseStateTypeAvailable
-	LeaseStateTypeLeased    LeaseStateType = generated.LeaseStateTypeLeased
-	LeaseStateTypeExpired   LeaseStateType = generated.LeaseStateTypeExpired
-	LeaseStateTypeBreaking  LeaseStateType = generated.LeaseStateTypeBreaking
-	LeaseStateTypeBroken    LeaseStateType = generated.LeaseStateTypeBroken
-)
-
-// PossibleLeaseStateTypeValues returns the possible values for the LeaseStateType const type.
-func PossibleLeaseStateTypeValues() []LeaseStateType {
-	return generated.PossibleLeaseStateTypeValues()
-}
-
-// LeaseStatusType defines values for LeaseStatusType
-type LeaseStatusType = generated.LeaseStatusType
-
-const (
-	LeaseStatusTypeLocked   LeaseStatusType = generated.LeaseStatusTypeLocked
-	LeaseStatusTypeUnlocked LeaseStatusType = generated.LeaseStatusTypeUnlocked
-)
-
-// PossibleLeaseStatusTypeValues returns the possible values for the LeaseStatusType const type.
-func PossibleLeaseStatusTypeValues() []LeaseStatusType {
-	return generated.PossibleLeaseStatusTypeValues()
 }

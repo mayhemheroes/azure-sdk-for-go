@@ -1,23 +1,33 @@
 # Release History
 
-## 0.5.2 (Unreleased)
+## 0.6.0 (2022-12-07)
 
 ### Features Added
 
+* Added BlobDeleteType to DeleteOptions to allow access to 'Permanent' DeleteType.
 * Added [Set Blob Expiry API](https://learn.microsoft.com/rest/api/storageservices/set-blob-expiry).
 * Added method `ServiceClient()` to the `azblob.Client` type, allowing access to the underlying service client.
+* Added support for object level immutability policy with versioning (Version Level WORM).
 
 ### Breaking Changes
 
 * Corrected the name for `saoid` and `suoid` SAS parameters in `BlobSignatureValues` struct as per [this](https://learn.microsoft.com/rest/api/storageservices/create-user-delegation-sas#construct-a-user-delegation-sas)
+* Updated type of `BlockSize` from int to int64 in `UploadStreamOptions`
+* Field `XMSContentCRC64` has been renamed to `ContentCRC64`
+* The `Lease*` constant types and values in the `blob` and `container` packages have been moved to the `lease` package and their names fixed up to avoid stuttering.
 
 ### Bugs Fixed
 
 * Corrected signing of User Delegation SAS. Fixes [#19372](https://github.com/Azure/azure-sdk-for-go/issues/19372) and [#19454](https://github.com/Azure/azure-sdk-for-go/issues/19454)
+* Added formatting of start and expiry time in [SetAccessPolicy](https://learn.microsoft.com/rest/api/storageservices/set-container-acl#request-body). Fixes [#18712](https://github.com/Azure/azure-sdk-for-go/issues/18712)
+* Uploading block blobs larger than 256MB can fail in some cases with error `net/http: HTTP/1.x transport connection broken`.
+* Blob name parameters are URL-encoded before constructing the complete blob URL.
 
 ### Other Changes
 
-* Avoid allocations when storing/fetching a slice via sync.Pool.
+* Added some missing public surface area in the `container` and `service` packages.
+* The `UploadStream()` methods now use anonymous memory mapped files for buffers in order to reduce heap allocations/fragmentation.
+  * The anonymous memory mapped files are typically backed by the page/swap file, multiple files are not actually created.
 
 ## 0.5.1 (2022-10-11)
 

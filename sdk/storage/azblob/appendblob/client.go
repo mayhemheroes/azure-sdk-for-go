@@ -10,6 +10,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
@@ -103,6 +104,11 @@ func (ab *Client) generated() *generated.AppendBlobClient {
 	return appendBlob
 }
 
+func (ab *Client) innerBlobGenerated() *generated.BlobClient {
+	b := ab.BlobClient()
+	return base.InnerClient((*base.Client[generated.BlobClient])(b))
+}
+
 // URL returns the URL endpoint used by the Client object.
 func (ab *Client) URL() string {
 	return ab.generated().Endpoint()
@@ -190,6 +196,24 @@ func (ab *Client) Undelete(ctx context.Context, o *blob.UndeleteOptions) (blob.U
 	return ab.BlobClient().Undelete(ctx, o)
 }
 
+// SetImmutabilityPolicy operation enables users to set the immutability policy on a blob.
+// https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview
+func (ab *Client) SetImmutabilityPolicy(ctx context.Context, expiryTime time.Time, options *blob.SetImmutabilityPolicyOptions) (blob.SetImmutabilityPolicyResponse, error) {
+	return ab.BlobClient().SetImmutabilityPolicy(ctx, expiryTime, options)
+}
+
+// DeleteImmutabilityPolicy operation enables users to delete the immutability policy on a blob.
+// https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview
+func (ab *Client) DeleteImmutabilityPolicy(ctx context.Context, options *blob.DeleteImmutabilityPolicyOptions) (blob.DeleteImmutabilityPolicyResponse, error) {
+	return ab.BlobClient().DeleteImmutabilityPolicy(ctx, options)
+}
+
+// SetLegalHold operation enables users to set legal hold on a blob.
+// https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview
+func (ab *Client) SetLegalHold(ctx context.Context, legalHold bool, options *blob.SetLegalHoldOptions) (blob.SetLegalHoldResponse, error) {
+	return ab.BlobClient().SetLegalHold(ctx, legalHold, options)
+}
+
 // SetTier operation sets the tier on a blob. The operation is allowed on a page
 // blob in a premium storage account and on a block blob in a blob storage account (locally
 // redundant storage only). A premium page blob's tier determines the allowed size, IOPS, and
@@ -202,8 +226,13 @@ func (ab *Client) SetTier(ctx context.Context, tier blob.AccessTier, o *blob.Set
 
 // SetExpiry operation sets an expiry time on an existing blob. This operation is only allowed on Hierarchical Namespace enabled accounts.
 // For more information, see https://learn.microsoft.com/en-us/rest/api/storageservices/set-blob-expiry
-func (ab *Client) SetExpiry(ctx context.Context, expiryType blob.ExpiryType, o *blob.SetExpiryOptions) (blob.SetExpiryResponse, error) {
-	return ab.BlobClient().SetExpiry(ctx, expiryType, o)
+func (ab *Client) SetExpiry(ctx context.Context, expiryType ExpiryType, o *SetExpiryOptions) (SetExpiryResponse, error) {
+	if expiryType == nil {
+		expiryType = ExpiryTypeNever{}
+	}
+	et, opts := expiryType.Format(o)
+	resp, err := ab.innerBlobGenerated().SetExpiry(ctx, et, opts)
+	return resp, err
 }
 
 // GetProperties returns the blob's properties.
